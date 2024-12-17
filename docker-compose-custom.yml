@@ -1,0 +1,101 @@
+services:
+  gateway:
+    build:
+      context: ./gateway
+    container_name: openmrs-gateway
+    restart: "unless-stopped"
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - openmrs-network
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: openmrs-frontend
+    restart: "unless-stopped"
+    environment:
+      SPA_PATH: /openmrs/spa
+      API_URL: /openmrs
+      SPA_CONFIG_URLS: /openmrs/spa/config-core_demo.json
+      SPA_DEFAULT_LOCALE:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      timeout: 5s
+    depends_on:
+      - backend
+    volumes:
+      - ./resources/logo.png:/usr/share/nginx/html/logo.png
+    networks:
+      - openmrs-network
+
+  backend:
+    build:
+      context: .
+    container_name: openmrs-backend
+    restart: "unless-stopped"
+    depends_on:
+      - db
+    environment:
+      OMRS_CONFIG_MODULE_WEB_ADMIN: "true"
+      OMRS_CONFIG_AUTO_UPDATE_DATABASE: "true"
+      OMRS_CONFIG_CREATE_TABLES: "true"
+      OMRS_CONFIG_CONNECTION_SERVER: db
+      OMRS_CONFIG_CONNECTION_DATABASE: openmrs
+      OMRS_CONFIG_CONNECTION_USERNAME: ${OPENMRS_DB_USER:-openmrs}
+      OMRS_CONFIG_CONNECTION_PASSWORD: ${OPENMRS_DB_PASSWORD:-openmrs}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/openmrs"]
+      timeout: 5s
+    volumes:
+      - openmrs-data:/openmrs/data
+    networks:
+      - openmrs-network
+
+  db:
+    container_name: openmrs-db
+    image: mariadb:10.11.7
+    restart: "unless-stopped"
+    command: "mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci"
+    healthcheck:
+      test: "mysql --user=${OMRS_DB_USER:-openmrs} --password=${OMRS_DB_PASSWORD:-openmrs} --execute \"SHOW DATABASES;\""
+      interval: 3s
+      timeout: 1s
+      retries: 5
+    environment:
+      MYSQL_DATABASE: openmrs
+      MYSQL_USER: ${OMRS_DB_USER:-openmrs}
+      MYSQL_PASSWORD: ${OMRS_DB_PASSWORD:-openmrs}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-openmrs}
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - openmrs-network
+
+
+  nginx-reverse-proxy:
+    container_name: openmrs-nginx
+    image: nginx:latest
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt/:/etc/letsencrypt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - gateway
+    networks:
+      - openmrs-network
+
+
+volumes:
+  openmrs-data:
+  db-data:
+  certbot-etc:
+  certbot-var:
+
+networks:
+  openmrs-network:
+    name: openmrs-network-custom
+    driver: bridge
