@@ -44,9 +44,7 @@
     }
   },
   "@openmrs/esm-primary-navigation-app": {
-    "logo":{
     "src": "${openmrsSpaBase}/logo.png",
     "alt": "Logo"
-    }
   }
 }
